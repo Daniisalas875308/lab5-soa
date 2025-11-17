@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.integration.annotation.Gateway
 import org.springframework.integration.annotation.MessagingGateway
 import org.springframework.integration.annotation.ServiceActivator
+import org.springframework.integration.channel.DirectChannel
 import org.springframework.integration.config.EnableIntegration
+import org.springframework.integration.dsl.DirectChannelSpec
 import org.springframework.integration.dsl.IntegrationFlow
 import org.springframework.integration.dsl.MessageChannels
 import org.springframework.integration.dsl.Pollers
@@ -48,7 +50,10 @@ class IntegrationApplication(
      * Multiple subscribers can receive messages from this channel.
      */
     @Bean
-    fun evenChannel(): PublishSubscribeChannelSpec<*> = MessageChannels.publishSubscribe()
+    fun oddChannel(): PublishSubscribeChannelSpec<*> = MessageChannels.publishSubscribe()
+
+    @Bean
+    fun numberChannel(): DirectChannelSpec = MessageChannels.direct()
 
     /**
      * Main integration flow that polls the integer source and routes messages.
@@ -61,16 +66,25 @@ class IntegrationApplication(
             options = { poller(Pollers.fixedRate(100)) },
         ) {
             transform { num: Int ->
-                logger.info("📥 Source generated number: {}", num)
+                logger.info("GEN| Source generated number: {}", num)
                 num
             }
+            channel("numberChannel")
+        }
+
+    /**
+     * Integration flow for routing numbers to even or odd channels.
+     * Logs the received number and routes accordingly.
+     */
+    @Bean
+    fun numberFlow(): IntegrationFlow =
+        integrationFlow("numberChannel") {
             route { p: Int ->
                 val channel = if (p % 2 == 0) "evenChannel" else "oddChannel"
-                logger.info("🔀 Router: {} → {}", p, channel)
+                logger.info("ROUTER| Router: {} -> {}", p, channel)
                 channel
             }
         }
-
     /**
      * Integration flow for processing even numbers.
      * Transforms integers to strings and logs the result.
@@ -79,11 +93,11 @@ class IntegrationApplication(
     fun evenFlow(): IntegrationFlow =
         integrationFlow("evenChannel") {
             transform { obj: Int ->
-                logger.info("  ⚙️  Even Transformer: {} → 'Number {}'", obj, obj)
+                logger.info("   TRANS| Even Transformer: {} -> 'Number {}'", obj, obj)
                 "Number $obj"
             }
             handle { p ->
-                logger.info("  ✅ Even Handler: Processed [{}]", p.payload)
+                logger.info("   CORRECT| Even Handler: Processed [{}]", p.payload)
             }
         }
 
@@ -96,16 +110,16 @@ class IntegrationApplication(
     fun oddFlow(): IntegrationFlow =
         integrationFlow("oddChannel") {
             filter { p: Int ->
-                val passes = p % 2 == 0
-                logger.info("  🔍 Odd Filter: checking {} → {}", p, if (passes) "PASS" else "REJECT")
+                val passes = p % 2 != 0
+                logger.info("   FIL| Odd Filter: checking {} -> {}", p, if (passes) "PASS" else "REJECT")
                 passes
             } // , { discardChannel("discardChannel") })
             transform { obj: Int ->
-                logger.info("  ⚙️  Odd Transformer: {} → 'Number {}'", obj, obj)
+                logger.info("   TRANS|  Odd Transformer: {} -> 'Number {}'", obj, obj)
                 "Number $obj"
             }
             handle { p ->
-                logger.info("  ✅ Odd Handler: Processed [{}]", p.payload)
+                logger.info("   CORRECT| Odd Handler: Processed [{}]", p.payload)
             }
         }
 
@@ -126,7 +140,7 @@ class IntegrationApplication(
     @Scheduled(fixedRate = 1000)
     fun sendNumber() {
         val number = -Random.nextInt(100)
-        logger.info("🚀 Gateway injecting: {}", number)
+        logger.info("GAT| Gateway injecting: {}", number)
         sendNumber.sendNumber(number)
     }
 }
@@ -139,7 +153,7 @@ class IntegrationApplication(
 class SomeService {
     @ServiceActivator(inputChannel = "oddChannel")
     fun handle(p: Any) {
-        logger.info("  🔧 Service Activator: Received [{}] (type: {})", p, p.javaClass.simpleName)
+        logger.info("   SER| Service Activator: Received [{}] (type: {})", p, p.javaClass.simpleName)
     }
 }
 
@@ -150,7 +164,7 @@ class SomeService {
  */
 @MessagingGateway
 interface SendNumber {
-    @Gateway(requestChannel = "evenChannel")
+    @Gateway(requestChannel = "numberChannel")
     fun sendNumber(number: Int)
 }
 
