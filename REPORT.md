@@ -2,8 +2,7 @@
 
 ## 1. EIP Diagram (Before)
 
-![Before Diagram](/EIPBefore.png)
-
+![Before Diagram](diagrams/before.png)
 
 ---
 
