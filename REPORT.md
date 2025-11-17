@@ -2,9 +2,8 @@
 
 ## 1. EIP Diagram (Before)
 
-![Before Diagram](diagrams/before.png)
+![Before Diagram](/EIPBefore.png)
 
-Describe what the starter code does and what problems you noticed.
 
 ---
 
